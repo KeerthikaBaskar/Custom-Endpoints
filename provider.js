@@ -1,145 +1,141 @@
-// provider.js
-// Run: node provider.js
-// Safe: keys come from env var PROVIDER_KEYS_JSON (never commit keys in code)
-
 const express = require("express");
-
-// Load dotenv for local development only (do not rely on it in production)
-if (process.env.NODE_ENV !== "production") {
-  // eslint-disable-next-line global-require
-  require("dotenv").config();
-}
+const fs = require("fs");
 
 const app = express();
 app.use(express.json());
 
-// -----------------------
-// Config (env-driven)
-// -----------------------
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-const DAILY_LIMIT = process.env.DAILY_LIMIT ? parseInt(process.env.DAILY_LIMIT, 10) : 3;
-const ADMIN_SECRET = process.env.ADMIN_SECRET || ""; // must set for admin actions
+// ======================
+// 1. LOAD KEYS
+// ======================
 
-if (!process.env.PROVIDER_KEYS_JSON) {
-  console.error("FATAL: PROVIDER_KEYS_JSON env var is required (JSON array). Exiting.");
-  process.exit(1);
-}
+let PROVIDER_KEYS = [
+  "f012f115386bdde4a0fec486895ad0cee34d177ddbb5b8de9969e5e71f9ddd8b",
+  "77e00a17b6448530031703da99e03bfe85a9022b4dfbb2b9395506248a23e925",
+  "2f7aa885db5dd3d14592bb852ee750811d25464382e7c8ccbf83658cb745f6d7"
+];
 
-let PROVIDER_KEYS;
 try {
-  const parsed = JSON.parse(process.env.PROVIDER_KEYS_JSON);
-  if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("not an array or empty");
-  PROVIDER_KEYS = parsed;
+  const data = JSON.parse(fs.readFileSync("keys.json", "utf8"));
+  if (Array.isArray(data) && data.length > 0) {
+    PROVIDER_KEYS = data;
+  }
 } catch (err) {
-  console.error("FATAL: cannot parse PROVIDER_KEYS_JSON:", err.message);
-  process.exit(1);
+  console.log("Using default keys since keys.json missing or invalid.");
 }
 
-// Usage tracking in-memory (per process)
-const usage = {}; // usage[key] = { count, resetAt (ms) }
+// ======================
+// 2. RATE LIMIT SETUP
+// ======================
 
-// init or reset usage for a key
-function initOrResetUsageFor(key) {
-  const now = Date.now();
+const DAILY_LIMIT = 3;
+const usage = {};
+
+function initOrResetUsage(key) {
   usage[key] = {
     count: 0,
-    resetAt: now + 24 * 60 * 60 * 1000, // 24 hours window
+    resetAt: Date.now() + 24 * 60 * 60 * 1000
   };
 }
 
-// Ensure all keys have usage object (on startup)
-for (const k of PROVIDER_KEYS) initOrResetUsageFor(k);
-
-// -----------------------
-// Helper functions
-// -----------------------
-function requireAdmin(req, res) {
-  const header = req.header("X-Admin-Secret");
-  if (!ADMIN_SECRET || !header || header !== ADMIN_SECRET) {
-    res.status(403).json({ error: "forbidden" });
-    return false;
-  }
-  return true;
-}
+// ======================
+// 3. MIDDLEWARE (shared for header/query)
+// ======================
 
 function validateKeyAndLimit(apiKey, res) {
   if (!apiKey) {
-    res.status(401).json({ error: "Missing API key", detail: "Send key in header or query." });
+    res.status(401).json({
+      error: "Missing API key",
+      detail: "Send key in header or query depending on endpoint"
+    });
     return false;
   }
+
   if (!PROVIDER_KEYS.includes(apiKey)) {
-    res.status(401).json({ error: "Invalid API key", detail: "Key not recognized." });
+    res.status(401).json({
+      error: "Invalid API key",
+      detail: "Key not recognized"
+    });
     return false;
   }
 
   const now = Date.now();
   if (!usage[apiKey] || now > usage[apiKey].resetAt) {
-    initOrResetUsageFor(apiKey);
+    initOrResetUsage(apiKey);
   }
 
   if (usage[apiKey].count >= DAILY_LIMIT) {
-    return res.status(429).json({
+    res.status(429).json({
       error: "Daily quota exceeded",
       key: apiKey,
       allowed_per_day: DAILY_LIMIT,
-      reset_at: new Date(usage[apiKey].resetAt).toISOString(),
+      reset_at: new Date(usage[apiKey].resetAt).toISOString()
     });
+    return false;
   }
 
-  usage[apiKey].count += 1;
+  usage[apiKey].count++;
   return true;
 }
 
-// -----------------------
-// Endpoints
-// -----------------------
+// ======================
+// 4A. HEADER-BASED ENDPOINT
+// ======================
 
-// Header-based endpoint (use X-Provider-Key)
 app.get("/api/v1/data", (req, res) => {
   const apiKey = req.header("X-Provider-Key");
+
   if (!validateKeyAndLimit(apiKey, res)) return;
 
+  console.log(`[DATA] Header key=${apiKey} count=${usage[apiKey].count}`);
+
   res.json({
-    message: "Success (header key endpoint)",
+    message: "Success from provider (header key endpoint)",
     key_used: apiKey,
     usage: usage[apiKey],
-    value: Math.floor(Math.random() * 100),
+    value: Math.floor(Math.random() * 100)
   });
 });
 
-// Query-param endpoint (use ?key=)
+// ======================
+// 4B. QUERY PARAM ENDPOINT
+// ======================
+
 app.get("/api/v1/data2", (req, res) => {
   const apiKey = req.query.key;
+
   if (!validateKeyAndLimit(apiKey, res)) return;
 
+  console.log(`[DATA2] Query key=${apiKey} count=${usage[apiKey].count}`);
+
   res.json({
-    message: "Success (query key endpoint)",
+    message: "Success from provider (query key endpoint)",
     key_used: apiKey,
     usage: usage[apiKey],
-    value: Math.floor(Math.random() * 100),
+    value: Math.floor(Math.random() * 100)
   });
 });
 
-// Protected debug (shows current keys + usage) - DO NOT expose in production without admin secret
-app.get("/admin/debug-keys", (req, res) => {
-  if (!requireAdmin(req, res)) return;
-  res.json({ keys: PROVIDER_KEYS, usage });
-});
 
-// Protected reset endpoint — resets all key usage windows (no redeploy needed)
+// ======================
+// RESET LIMITS OF KEYS
+// ======================
+
 app.post("/admin/reset", (req, res) => {
-  if (!requireAdmin(req, res)) return;
-  for (const k of PROVIDER_KEYS) initOrResetUsageFor(k);
-  res.json({ message: "All key limits reset successfully", reset_at: new Date().toISOString() });
+  for (const k of PROVIDER_KEYS) {
+    initOrResetUsage(k);
+  }
+  res.json({ message: "All key limits reset successfully" });
 });
 
-// Health
-app.get("/health", (req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Provider running on http://0.0.0.0:${PORT}`);
-  console.log("Header endpoint: GET /api/v1/data  (X-Provider-Key)");
-  console.log("Query endpoint : GET /api/v1/data2?key=YOUR_KEY");
-  console.log("Admin reset   : POST /admin/reset  (X-Admin-Secret header)");
+// ======================
+// 5. START SERVER
+// ======================
+
+const PORT = process.env.PORT || 3000; 
+
+app.listen(PORT, "0.0.0.0", () => { // Bind to 0.0.0.0 for external access
+  console.log(`Provider running on port ${PORT}`);
+  console.log("Header endpoint: /api/v1/data (X-Provider-Key)");
+  console.log("Query end point : /api/v1/data2?key=YOUR_KEY");
 });
