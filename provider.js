@@ -81,7 +81,7 @@ function validateKeyAndLimit(apiKey, res) {
 // 4A. HEADER-BASED ENDPOINT
 // ======================
 
-app.get("/api/v1/data", (req, res) => {
+app.get("/data", (req, res) => {
   const apiKey = req.header("X-Provider-Key");
 
   if (!validateKeyAndLimit(apiKey, res)) return;
@@ -94,13 +94,15 @@ app.get("/api/v1/data", (req, res) => {
     usage: usage[apiKey],
     value: Math.floor(Math.random() * 100)
   });
+
+  // res.json(req.headers);
 });
 
 // ======================
 // 4B. QUERY PARAM ENDPOINT
 // ======================
 
-app.get("/api/v1/data2", (req, res) => {
+app.get("/data2", (req, res) => {
   const apiKey = req.query.key;
 
   if (!validateKeyAndLimit(apiKey, res)) return;
@@ -127,6 +129,9 @@ app.post("/admin/reset", (req, res) => {
   res.json({ message: "All key limits reset successfully" });
 });
 
+// app.get('/data', (req, res) => {
+//   res.send('OK from /data');
+// });
 
 // ======================
 // 5. START SERVER
