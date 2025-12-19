@@ -27,7 +27,7 @@ try {
 // 2. RATE LIMIT SETUP
 // ======================
 
-const DAILY_LIMIT = 20;
+const DAILY_LIMIT = 3;
 const usage = {};
 
 function initOrResetUsage(key) {
