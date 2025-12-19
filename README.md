@@ -224,3 +224,9 @@ POST https://custom-endpoints.onrender.com/admin/reset
 | Host Binding | `0.0.0.0` |
 
 ### Start Server
+
+```bash
+node index.js
+```
+
+---
