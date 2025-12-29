@@ -146,60 +146,6 @@
 // });
 
 
-
-// const express = require("express");
-
-// const app = express();
-// app.use(express.json());
-
-// // ======================
-// // HEADER-BASED ENDPOINT
-// // ======================
-// app.get("/data", (req, res) => {
-
-//   // OPTIONAL: verify request came from WSO2
-//   const injectedKey = req.header("X-Provider-Key");
-
-//   if (!injectedKey) {
-//     return res.status(403).json({
-//       error: "Request must come via WSO2 Gateway"
-//     });
-//   }
-
-//   // Business logic ONLY
-//   res.json({
-//     message: "Success from backend",
-//     received_provider_key: injectedKey, // just for debugging
-//     value: Math.floor(Math.random() * 100)
-//   });
-// });
-
-// // ======================
-// // QUERY PARAM ENDPOINT
-// // ======================
-// app.get("/data2", (req, res) => {
-
-//   const injectedKey = req.query.key;
-
-//   if (!injectedKey) {
-//     return res.status(403).json({
-//       error: "Request must come via WSO2 Gateway"
-//     });
-//   }
-
-//   res.json({
-//     message: "Success from backend",
-//     received_provider_key: injectedKey,
-//     value: Math.floor(Math.random() * 100)
-//   });
-// });
-
-// const PORT = 3000;
-// app.listen(PORT, "0.0.0.0", () => {
-//   console.log(`Backend running on port ${PORT}`);
-// });
-
-
 const express = require("express");
 const cors = require("cors");
 const app = express();
@@ -211,32 +157,21 @@ app.use(cors()); // Enable CORS for frontend
 // HEADER-BASED ENDPOINT
 // ======================
 app.get("/data", (req, res) => {
+
   // OPTIONAL: verify request came from WSO2
   const injectedKey = req.header("X-Provider-Key");
+
   if (!injectedKey) {
     return res.status(403).json({
-      error: "Request must come via WSO2 Gateway",
-      status: "forbidden"
+      error: "Request must come via WSO2 Gateway"
     });
   }
-  
-  // Business logic with enhanced response data
+
+  // Business logic ONLY
   res.json({
-    status: "success",
-    message: "Data retrieved successfully",
-    timestamp: new Date().toISOString(),
-    data: {
-      user_id: Math.floor(Math.random() * 1000),
-      temperature: (Math.random() * 30 + 15).toFixed(1),
-      humidity: Math.floor(Math.random() * 40 + 40),
-      sensor_status: "active",
-      random_value: Math.floor(Math.random() * 100)
-    },
-    metadata: {
-      provider_key_received: injectedKey,
-      endpoint: "/data",
-      method: "header-based"
-    }
+    message: "Success from backend",
+    received_provider_key: injectedKey, // just for debugging
+    value: Math.floor(Math.random() * 100)
   });
 });
 
@@ -244,31 +179,19 @@ app.get("/data", (req, res) => {
 // QUERY PARAM ENDPOINT
 // ======================
 app.get("/data2", (req, res) => {
+
   const injectedKey = req.query.key;
+
   if (!injectedKey) {
     return res.status(403).json({
-      error: "Request must come via WSO2 Gateway",
-      status: "forbidden"
+      error: "Request must come via WSO2 Gateway"
     });
   }
-  
-  // Business logic with enhanced response data
+
   res.json({
-    status: "success",
-    message: "Data retrieved successfully",
-    timestamp: new Date().toISOString(),
-    data: {
-      transaction_id: `TXN-${Math.floor(Math.random() * 100000)}`,
-      amount: (Math.random() * 1000).toFixed(2),
-      currency: "USD",
-      items_count: Math.floor(Math.random() * 10) + 1,
-      random_value: Math.floor(Math.random() * 100)
-    },
-    metadata: {
-      provider_key_received: injectedKey,
-      endpoint: "/data2",
-      method: "query-param"
-    }
+    message: "Success from backend",
+    received_provider_key: injectedKey,
+    value: Math.floor(Math.random() * 100)
   });
 });
 
@@ -276,3 +199,81 @@ const PORT = 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend running on port ${PORT}`);
 });
+
+
+// const express = require("express");
+// const cors = require("cors");
+// const app = express();
+
+// app.use(express.json());
+// app.use(cors()); // Enable CORS for frontend
+
+// // ======================
+// // HEADER-BASED ENDPOINT
+// // ======================
+// app.get("/data", (req, res) => {
+//   // OPTIONAL: verify request came from WSO2
+//   const injectedKey = req.header("X-Provider-Key");
+//   if (!injectedKey) {
+//     return res.status(403).json({
+//       error: "Request must come via WSO2 Gateway",
+//       status: "forbidden"
+//     });
+//   }
+  
+//   // Business logic with enhanced response data
+//   res.json({
+//     status: "success",
+//     message: "Data retrieved successfully",
+//     timestamp: new Date().toISOString(),
+//     data: {
+//       user_id: Math.floor(Math.random() * 1000),
+//       temperature: (Math.random() * 30 + 15).toFixed(1),
+//       humidity: Math.floor(Math.random() * 40 + 40),
+//       sensor_status: "active",
+//       random_value: Math.floor(Math.random() * 100)
+//     },
+//     metadata: {
+//       provider_key_received: injectedKey,
+//       endpoint: "/data",
+//       method: "header-based"
+//     }
+//   });
+// });
+
+// // ======================
+// // QUERY PARAM ENDPOINT
+// // ======================
+// app.get("/data2", (req, res) => {
+//   const injectedKey = req.query.key;
+//   if (!injectedKey) {
+//     return res.status(403).json({
+//       error: "Request must come via WSO2 Gateway",
+//       status: "forbidden"
+//     });
+//   }
+  
+//   // Business logic with enhanced response data
+//   res.json({
+//     status: "success",
+//     message: "Data retrieved successfully",
+//     timestamp: new Date().toISOString(),
+//     data: {
+//       transaction_id: `TXN-${Math.floor(Math.random() * 100000)}`,
+//       amount: (Math.random() * 1000).toFixed(2),
+//       currency: "USD",
+//       items_count: Math.floor(Math.random() * 10) + 1,
+//       random_value: Math.floor(Math.random() * 100)
+//     },
+//     metadata: {
+//       provider_key_received: injectedKey,
+//       endpoint: "/data2",
+//       method: "query-param"
+//     }
+//   });
+// });
+
+// const PORT = 3000;
+// app.listen(PORT, "0.0.0.0", () => {
+//   console.log(`Backend running on port ${PORT}`);
+// });
