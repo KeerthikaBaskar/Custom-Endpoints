@@ -146,59 +146,58 @@
 // });
 
 
-const express = require("express");
-const cors = require("cors");
-const app = express();
 
-app.use(express.json());
-app.use(cors()); // Enable CORS for frontend
+// const express = require("express");
 
-// ======================
-// HEADER-BASED ENDPOINT
-// ======================
-app.get("/data", (req, res) => {
+// const app = express();
+// app.use(express.json());
 
-  // OPTIONAL: verify request came from WSO2
-  const injectedKey = req.header("X-Provider-Key");
+// // ======================
+// // HEADER-BASED ENDPOINT
+// // ======================
+// app.get("/data", (req, res) => {
 
-  if (!injectedKey) {
-    return res.status(403).json({
-      error: "Request must come via WSO2 Gateway"
-    });
-  }
+//   // OPTIONAL: verify request came from WSO2
+//   const injectedKey = req.header("X-Provider-Key");
 
-  // Business logic ONLY
-  res.json({
-    message: "Success from backend",
-    received_provider_key: injectedKey, // just for debugging
-    value: Math.floor(Math.random() * 100)
-  });
-});
+//   if (!injectedKey) {
+//     return res.status(403).json({
+//       error: "Request must come via WSO2 Gateway"
+//     });
+//   }
 
-// ======================
-// QUERY PARAM ENDPOINT
-// ======================
-app.get("/data2", (req, res) => {
+//   // Business logic ONLY
+//   res.json({
+//     message: "Success from backend",
+//     received_provider_key: injectedKey, // just for debugging
+//     value: Math.floor(Math.random() * 100)
+//   });
+// });
 
-  const injectedKey = req.query.key;
+// // ======================
+// // QUERY PARAM ENDPOINT
+// // ======================
+// app.get("/data2", (req, res) => {
 
-  if (!injectedKey) {
-    return res.status(403).json({
-      error: "Request must come via WSO2 Gateway"
-    });
-  }
+//   const injectedKey = req.query.key;
 
-  res.json({
-    message: "Success from backend",
-    received_provider_key: injectedKey,
-    value: Math.floor(Math.random() * 100)
-  });
-});
+//   if (!injectedKey) {
+//     return res.status(403).json({
+//       error: "Request must come via WSO2 Gateway"
+//     });
+//   }
 
-const PORT = 3000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Backend running on port ${PORT}`);
-});
+//   res.json({
+//     message: "Success from backend",
+//     received_provider_key: injectedKey,
+//     value: Math.floor(Math.random() * 100)
+//   });
+// });
+
+// const PORT = 3000;
+// app.listen(PORT, "0.0.0.0", () => {
+//   console.log(`Backend running on port ${PORT}`);
+// });
 
 
 // const express = require("express");
@@ -277,3 +276,105 @@ app.listen(PORT, "0.0.0.0", () => {
 // app.listen(PORT, "0.0.0.0", () => {
 //   console.log(`Backend running on port ${PORT}`);
 // });
+
+
+const express = require("express");
+const cors = require("cors");
+
+const app = express();
+app.use(express.json());
+app.use(cors());
+
+// ======================
+// RATE LIMIT SETUP
+// ======================
+const DAILY_LIMIT = 3;
+const usage = {};
+
+function initOrResetUsage(key) {
+  usage[key] = {
+    count: 0,
+    resetAt: Date.now() + 24 * 60 * 60 * 1000
+  };
+}
+
+// ======================
+// VALIDATE + LIMIT (NO KEY LIST)
+// ======================
+function validateKeyAndLimit(injectedKey, res) {
+  if (!injectedKey) {
+    res.status(403).json({
+      error: "Request must come via WSO2 Gateway",
+      detail: "Injected key missing"
+    });
+    return false;
+  }
+
+  const now = Date.now();
+  if (!usage[injectedKey] || now > usage[injectedKey].resetAt) {
+    initOrResetUsage(injectedKey);
+  }
+
+  if (usage[injectedKey].count >= DAILY_LIMIT) {
+    res.status(429).json({
+      error: "Daily quota exceeded",
+      key_used: injectedKey.slice(0, 8) + "****",
+      allowed_per_day: DAILY_LIMIT,
+      reset_at: new Date(usage[injectedKey].resetAt).toISOString()
+    });
+    return false;
+  }
+
+  usage[injectedKey].count++;
+  return true;
+}
+
+// ======================
+// HEADER-BASED ENDPOINT
+// ======================
+app.get("/data", (req, res) => {
+  const injectedKey = req.header("X-Provider-Key");
+
+  if (!validateKeyAndLimit(injectedKey, res)) return;
+
+  console.log(`[DATA] key=${injectedKey} count=${usage[injectedKey].count}`);
+
+  res.json({
+    message: "Success via WSO2 (header-based)",
+    key_used: injectedKey.slice(0, 8) + "****",
+    usage: usage[injectedKey],
+    value: Math.floor(Math.random() * 100)
+  });
+});
+
+// ======================
+// QUERY PARAM ENDPOINT
+// ======================
+app.get("/data2", (req, res) => {
+  const injectedKey = req.query.key;
+
+  if (!validateKeyAndLimit(injectedKey, res)) return;
+
+  console.log(`[DATA2] key=${injectedKey} count=${usage[injectedKey].count}`);
+
+  res.json({
+    message: "Success via WSO2 (query-based)",
+    key_used: injectedKey.slice(0, 8) + "****",
+    usage: usage[injectedKey],
+    value: Math.floor(Math.random() * 100)
+  });
+});
+
+// ======================
+// ADMIN RESET (OPTIONAL)
+// ======================
+app.post("/admin/reset", (req, res) => {
+  Object.keys(usage).forEach(k => initOrResetUsage(k));
+  res.json({ message: "All key limits reset successfully" });
+});
+
+// ======================
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Backend running on port ${PORT}`);
+});
